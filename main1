@@ -378,16 +378,16 @@ by_id2[, genotype:=factor(genotype, levels=c("WT", "HET", "MUT"))]
 
 by_genotype_line = by_id2[, list(mean_Ad_avg=mean(Ad_avg, na.rm=TRUE),
                                  mean_As_avg=mean(As_avg, na.rm=TRUE),
-                                 mean_Ad_avg=mean(Ad_avg, na.rm=TRUE),
+                                 #mean_Ad_avg=mean(Ad_avg, na.rm=TRUE),
                                  sd_Ad_avg=sd(Ad_avg, na.rm=TRUE),
-                                 mean_As_avg=mean(As_avg, na.rm=TRUE),
+                                 #mean_As_avg=mean(As_avg, na.rm=TRUE),
                                  sd_As_avg=sd(As_avg, na.rm=TRUE),
                                  mean_SA=mean(SA, na.rm=TRUE),
                                  mean_EFA=mean(EFA, na.rm=TRUE),
-                                 mean_SA_avg=mean(SA, na.rm=TRUE),
-                                 sd_SA_avg=sd(SA, na.rm=TRUE),
-                                 mean_EFA_avg=mean(EFA, na.rm=TRUE),
-                                 sd_EFA_avg=sd(EFA, na.rm=TRUE),
+                                 #mean_SA_avg=mean(SA, na.rm=TRUE),
+                                 sd_SA=sd(SA, na.rm=TRUE),
+                                 #mean_EFA_avg=mean(EFA, na.rm=TRUE),
+                                 sd_EFA=sd(EFA, na.rm=TRUE),
                                  mean_weight=mean(weight_gr, na.rm=TRUE),
                                  sd_weight=sd(weight_gr, na.rm=TRUE),
                                  mean_HR_avg=mean(HR_avg, na.rm=TRUE),
@@ -519,7 +519,7 @@ cross_size = 1.2
 error_width = 0.4
 cross_width = 0.3 #0.3
 error_color = "grey30"
-bin_denom = 9 #effected by step_increase and y_mult_top, was 14.5
+bin_denom = 14 #effected by step_increase and y_mult_top, was 14.5
 step_increase = 0.10 #0.05 overlap, 0.20 good
 y_mult_top = 0.055 
 
@@ -591,13 +591,13 @@ for (tmp_line in sort(unique(by_id2$line))) {
                  binpositions="bygroup", color="grey30") +
     scale_fill_manual(values=genotype_colors) +
     labs(title="Diastolic Area") +
-    facet_grid( ~ age) + # (sex ~ age)
+    facet_grid(cols = vars(age)) + # (sex ~ age)
     stat_pvalue_manual(data=tmp_test_Ad, 
                        label.size=3.0, tip.length = 0.01,
-                       label="p.adj", hide.ns=FALSE,step.increase = step_increase)  +
-    scale_y_continuous(expand = expansion(mult = c(0.15, y_mult_top)))+ #changed from 0.05 
-    geom_label_repel(aes(y=Ad_avg, label=rownames(id2)), hjust=0,
-                     size=3, segment.size=0.25, nudge_y = 0.5, direction="y", na.rm = TRUE) 
+                       label="p.adj", hide.ns=TRUE, step.increase = step_increase)  +
+    scale_y_continuous(expand = expansion(mult = c(0.15, y_mult_top))) #changed from 0.05 +
+    #geom_label_repel(data=tmp_tab, aes(x= genotype, y=Ad_avg, label= id2), hjust=0,
+                   #  size=3, segment.size=0.25, nudge_y = 0.5, direction="y", na.rm = TRUE) 
   
   
   
@@ -755,7 +755,7 @@ for (tmp_line in sort(unique(by_id2$line))) {
   # #------ Print figure as page in pdf file -----
   #   # pdf("test.pdf", width=6.5, height=24)
   
-  print(plt_Ad + #plt_EFA + plt_weight +
+  print(plt_Ad + plt_EFA + plt_weight +
           plot_layout(guides="collect", nrow=6, ncol=1) +
           plot_annotation(title=tmp_line))
   
