@@ -1,0 +1,962 @@
+#From normalized data R, but not normalizing any data
+
+
+library(data.table)
+library(ggplot2)
+library(ggforce)
+library(ggrepel)
+library(patchwork)
+
+library(rstatix)
+library(ggsignif)
+library(ggpubr)
+library(tibble)
+
+full_tab = fread("Allcombined_sites_ultrasound_analysis_2023-05-16.txt")
+
+# Human BMI = kg / m^2.
+# To compute correctly using g and cm as input:
+# BMI = (g / cm^2) * 10
+
+full_tab[, BMI_human:=(weight_gr / length_cm^2) * 10]
+
+# Create unique fish identifier.
+full_tab$id2 = paste(sprintf("%03d", full_tab$fish_id), 
+                     full_tab$sex, 
+                     full_tab$Age, 
+                     full_tab$genotype, 
+                     full_tab$Line, 
+                     sep="_")
+
+
+################################################################################
+#only males used in analysis
+full_tab = full_tab[sex == "M"]
+
+
+measure_list = list(Vs=c("Vs_1", "Vs_2", "Vs_3"),
+                    Vd=c("Vd_2", "Vd_2", "Vd_3"),
+                    As=c("As_1", "As_2", "As_3"),
+                    Ad=c("Ad_1", "Ad_2", "Ad_3"),
+                    HR=c("HR_1", "HR_2", "HR_3"),
+                    inflow=c("inflow_avg_1", "inflow_avg_2", "inflow_avg_3"),
+                    outflow=c("outflow_avg_1", "outflow_avg_2", "outflow_avg_3"))
+
+
+
+
+id_vec = c("fish_id", "genotype", "sex", "weight_gr", "length_cm",
+           "BMI_human", "Min_Time_under_tricaine", "dob", "Age", "age", 
+           "Line", "line", "id2")
+
+# mtab keeps tech replicates separate.
+mtab = melt(full_tab, 
+            id.vars=id_vec, 
+            measure.vars=measure_list, 
+            variable.name="tech_rep_id")
+
+by_id2 = mtab[, list(Vs_avg=mean(Vs, na.rm=TRUE),
+                     Vs_min=min(Vs, na.rm=TRUE),
+                     Vs_max=max(Vs, na.rm=TRUE),
+                     Vd_avg=mean(Vd, na.rm=TRUE),
+                     Vd_min=min(Vd, na.rm=TRUE),
+                     Vd_max=max(Vd, na.rm=TRUE),
+                     As_avg=mean(As, na.rm=TRUE),
+                     As_min=min(As, na.rm=TRUE),
+                     As_max=max(As, na.rm=TRUE),
+                     Ad_avg=mean(Ad, na.rm=TRUE),
+                     Ad_min=min(Ad, na.rm=TRUE),
+                     Ad_max=max(Ad, na.rm=TRUE),
+                     HR_avg=mean(HR, na.rm=TRUE),
+                     HR_min=min(HR, na.rm=TRUE),
+                     HR_max=max(HR, na.rm=TRUE),
+                     inflow_avg=mean(inflow, na.rm=TRUE),
+                     outflow_avg=mean(outflow, na.rm=TRUE)),
+              by=list(id2, genotype, sex, line, age, weight_gr, length_cm, BMI_human)]
+
+
+
+
+
+
+
+# Plots.------------------------------------------------------------------------
+
+twenty_color = c("#1f77b4","#aec7e8","#ff7f0e","#ffbb78","#2ca02c",
+               "#98df8a","#d62728","#ff9896","#9467bd","#c5b0d5",
+               "#8c564b","#c49c94","#e377c2","#f7b6d2","#7f7f7f",
+               "#c7c7c7","#bcbd22","#dbdb8d","#17becf","#9edae5")
+
+# #### WT plotting  ####
+# 
+# weight_width = 0.005
+# 
+# p13.0 = ggplot() +
+#      geom_smooth(data=by_id2[genotype == "WT"], aes(x=weight_gr, y=As_avg),
+#                  method="lm", se=FALSE, color="grey30") +
+#      geom_linerange(data=by_id2[genotype == "WT"], 
+#                     aes(x=weight_gr, ymin=As_min, ymax=As_max, color=id2)) +
+#      geom_segment(data=by_id2[genotype == "WT"],
+#                    aes(x=weight_gr + weight_width, 
+#                        xend=weight_gr - weight_width, 
+#                        y=As_avg, yend=As_avg, color=id2),
+#                    size=1.0) +
+#      geom_point(data=mtab[genotype == "WT"], 
+#                 aes(y=As, x=weight_gr, fill=id2), 
+#                 size=2, alpha=1, shape=21, color="white") +
+#      scale_color_manual(values=rep(twenty_color, times=4), guide=FALSE) +
+#      scale_fill_manual(values=rep(twenty_color, times=4), guide=FALSE) +
+#      theme(panel.background=element_rect(fill="grey60")) +
+#      theme(panel.grid=element_line(colour="grey80")) +
+#      facet_grid(sex ~ age)
+# 
+# ggsave("wt_all_reps_As_vs_weight_by_sex_by_age_20220111.pdf", plot=p13.0,
+#        width=9, height=7.25)
+# 
+# p13.1 = ggplot() +
+#      geom_smooth(data=by_id2[genotype == "WT"], aes(x=weight_gr, y=As_avg),
+#                  method="lm", se=FALSE, color="grey30") +
+#      geom_label_repel(data=by_id2[genotype == "WT"], size=1.4,
+#                      aes(y=As_avg, x=weight_gr, fill=id2, label=id2),
+#                      min.segment.length=unit(0.4, "lines"), label.size=NA,
+#                      point.padding = unit(0.6, 'lines'), segment.size=0.2) +
+#      geom_linerange(data=by_id2[genotype == "WT"], 
+#                     aes(x=weight_gr, ymin=As_min, ymax=As_max, color=id2)) +
+#      geom_segment(data=by_id2[genotype == "WT"],
+#                    aes(x=weight_gr + weight_width, 
+#                        xend=weight_gr - weight_width, 
+#                        y=As_avg, yend=As_avg, color=id2),
+#                    size=1.0) +
+#      geom_point(data=mtab[genotype == "WT"], 
+#                 aes(y=As, x=weight_gr, fill=id2), 
+#                 size=2, alpha=1, shape=21, color="white") +
+#      scale_color_manual(values=rep(twenty_color, times=4), guide=FALSE) +
+#      scale_fill_manual(values=rep(twenty_color, times=4), guide=FALSE) +
+#      theme(panel.background=element_rect(fill="grey60")) +
+#      theme(panel.grid=element_line(colour="grey80")) +
+#      facet_grid(sex ~ age)
+# 
+# ggsave("wt_all_reps_As_vs_weight_by_sex_by_age_labels_20220111.pdf", plot=p13.1,
+#        width=9, height=7.25)
+# 
+# 
+# 
+# p14.0 = ggplot() +
+#      geom_smooth(data=by_id2[genotype == "WT"], aes(x=weight_gr, y=Ad_avg),
+#                  method="lm", se=FALSE, color="grey30") +
+#      geom_linerange(data=by_id2[genotype == "WT"], 
+#                     aes(x=weight_gr, ymin=Ad_min, ymax=Ad_max, color=id2)) +
+#      geom_segment(data=by_id2[genotype == "WT"],
+#                    aes(x=weight_gr + weight_width, 
+#                        xend=weight_gr - weight_width, 
+#                        y=Ad_avg, yend=Ad_avg, color=id2),
+#                    size=1.0) +
+#      geom_point(data=mtab[genotype == "WT"], 
+#                 aes(y=Ad, x=weight_gr, fill=id2), 
+#                 size=2, alpha=1, shape=21, color="white") +
+#      scale_color_manual(values=rep(twenty_color, times=4), guide=FALSE) +
+#      scale_fill_manual(values=rep(twenty_color, times=4), guide=FALSE) +
+#      theme(panel.background=element_rect(fill="grey60")) +
+#      theme(panel.grid=element_line(colour="grey80")) +
+#      facet_grid(sex ~ age)
+# 
+# ggsave("wt_all_reps_Ad_vs_weight_by_sex_by_age_20220111.pdf", plot=p14.0,
+#        width=9, height=7.25)
+# 
+# p14.1 = ggplot() +
+#      geom_smooth(data=by_id2[genotype == "WT"], aes(x=weight_gr, y=Ad_avg),
+#                  method="lm", se=FALSE, color="grey30") +
+#      geom_label_repel(data=by_id2[genotype == "WT"], size=1.4,
+#                      aes(y=Ad_avg, x=weight_gr, fill=id2, label=id2),
+#                      min.segment.length=unit(0.4, "lines"), label.size=NA,
+#                      point.padding = unit(0.6, 'lines'), segment.size=0.2) +
+#      geom_linerange(data=by_id2[genotype == "WT"], 
+#                     aes(x=weight_gr, ymin=Ad_min, ymax=Ad_max, color=id2)) +
+#      geom_segment(data=by_id2[genotype == "WT"],
+#                    aes(x=weight_gr + weight_width, 
+#                        xend=weight_gr - weight_width, 
+#                        y=Ad_avg, yend=Ad_avg, color=id2),
+#                    size=1.0) +
+#      geom_point(data=mtab[genotype == "WT"], 
+#                 aes(y=Ad, x=weight_gr, fill=id2), 
+#                 size=2, alpha=1, shape=21, color="white") +
+#      scale_color_manual(values=rep(twenty_color, times=4), guide=FALSE) +
+#      scale_fill_manual(values=rep(twenty_color, times=4), guide=FALSE) +
+#      theme(panel.background=element_rect(fill="grey60")) +
+#      theme(panel.grid=element_line(colour="grey80")) +
+#      facet_grid(sex ~ age)
+# 
+# ggsave("wt_all_reps_Ad_vs_weight_by_sex_by_age_labels_20220111.pdf", plot=p14.1,
+#        width=9, height=7.25)
+# 
+# #-------------------------------------------------------------------------------
+# 
+# p15 = ggplot() +
+#      geom_smooth(data=by_id2, aes(x=weight_gr, y=HR_avg),
+#                  method="lm", se=FALSE, color="grey30") +
+#      geom_linerange(data=by_id2, 
+#                     aes(x=weight_gr, ymin=HR_min, ymax=HR_max, color=id2)) +
+#      geom_segment(data=by_id2,
+#                    aes(x=weight_gr + weight_width, 
+#                        xend=weight_gr - weight_width, 
+#                        y=HR_avg, yend=HR_avg, color=id2),
+#                    size=1.0) +
+#      geom_point(data=mtab, 
+#                 aes(y=HR, x=weight_gr, fill=id2), 
+#                 size=2, alpha=1, shape=21, color="white") +
+#      scale_color_manual(values=twenty_color) +
+#      scale_fill_manual(values=twenty_color) +
+#      theme(panel.background=element_rect(fill="grey60")) +
+#      theme(panel.grid=element_line(colour="grey80"))
+# 
+# ggsave("5month_wt_males_all_reps_HR_x_weight_20211220.pdf", plot=p15,
+#        width=7.5, height=5.25)
+# 
+# 
+# p2 = ggplot(mtab, aes(y=Vd, x=weight_gr)) +
+#      theme_bw() +
+#      geom_point(size=1, alpha=0.4) +
+#      geom_smooth(method="lm")
+# 
+# 
+# 
+# 
+# 
+# p3 = ggplot(mtab, aes(y=Vd, x=Vs, color=id2, group=id2)) +
+#      theme_bw() +
+#      geom_mark_hull(expand=0.01, radius=0.01, aes(fill=id2)) +
+#      geom_point(size=2, alpha=1, shape=21, aes(fill=id2), color="white") +
+#      #geom_smooth(method="lm", se=FALSE) +
+#      scale_color_manual(values=twenty_color) +
+#      scale_fill_manual(values=twenty_color) +
+#      theme(panel.background=element_rect(fill="grey60")) +
+#      theme(panel.grid=element_line(colour="grey80"))
+#      
+# ggsave("5month_wt_males_all_reps_Vd_x_Vs_20211220.pdf", plot=p3,
+#        width=7.5, height=5.25)
+# 
+# p32 = ggplot(mtab, aes(y=Ad, x=As, color=id2, group=id2)) +
+#      theme_bw() +
+#      geom_mark_hull(expand=0.01, radius=0.01, aes(fill=id2)) +
+#      geom_point(size=2, alpha=1, shape=21, aes(fill=id2), color="white") +
+#      #geom_smooth(method="lm", se=FALSE) +
+#      scale_color_manual(values=twenty_color) +
+#      scale_fill_manual(values=twenty_color) +
+#      theme(panel.background=element_rect(fill="grey60")) +
+#      theme(panel.grid=element_line(colour="grey80"))
+#      
+# ggsave("5month_wt_males_all_reps_As_x_Ad_20211220.pdf", plot=p32,
+#        width=7.5, height=5.25)
+# 
+# 
+# 
+# 
+# p4 = ggplot(mtab, aes(y=length_cm, x=weight_gr)) +
+#      theme_bw() +
+#      geom_point(size=1, alpha=0.4) +
+#      geom_smooth(method="lm")
+# 
+# 
+# 
+# p4
+# 
+# p5 = ggplot(mtab, aes(y=outflow, x=weight_gr)) +
+#      theme_bw() +
+#      geom_point(size=1, alpha=0.4) +
+#      geom_smooth(method="lm")
+# 
+# 
+# p52 = ggplot(mtab, aes(y=outflow, x=BMI_human)) +
+#      theme_bw() +
+#      geom_point(size=1, alpha=0.4) +
+#      geom_smooth(method="lm")
+# 
+# p53 = ggplot(mtab, aes(y=outflow_avg, x=Vs)) +
+#      theme_bw() +
+#      geom_point(size=1, alpha=0.4) +
+#      geom_smooth(method="lm")
+# 
+# p53.1 = ggplot(by_id2, aes(y=outflow_avg, x=Vs_avg)) +
+#      theme_bw() +
+#      geom_point(size=1, alpha=0.4) +
+#      geom_smooth(method="lm")
+# 
+# # Is Diastolic area related to weight?
+# p53.2 = ggplot(by_id2, aes(y=Ad_avg, x=weight_gr)) +
+#      theme_bw() +
+#      geom_point(size=1, alpha=0.4) +
+#      geom_smooth(method="lm")
+# 
+# 
+# 
+# p53.3 = ggplot(by_id2, aes(y=HR_avg, x=weight_gr)) +
+#      theme_bw() +
+#      geom_point(size=1, alpha=0.4) +
+#      geom_smooth(method="lm")
+#      
+# 
+# 
+# p6 = ggplot(data=by_id2, aes(x=inflow_avg, y=abs(outflow_avg), color=genotype)) +
+#      geom_point(size=2) +
+#      facet_grid(sex ~ line)
+# p6
+# 
+# #### end ####
+#   
+# #========================================
+#   
+# 
+# # Possibly useful: https://towardsdatascience.com/removing-non-linear-trends-from-timeseries-data-b21f7567ed51
+# 
+# # ? Include weight as a term in the model? How to do that with EF?
+# # m2 = lm(Ad_avg ~ weight_gr + genotype, data=by_id2_full)
+# #========================================
+
+xtab = data.table(expand.grid(sex=sort(unique(by_id2$sex)),
+                              age=sort(unique(by_id2$age)),
+                              stringsAsFactors=FALSE))
+
+
+model_res = list()
+
+for (i in seq(nrow(xtab))) {
+  tmp_sex = xtab[i, sex]
+  tmp_age = xtab[i, age]
+  tmp_data = by_id2[sex == tmp_sex & age == tmp_age & genotype == "WT"]
+
+  tmp_fit_Ad = lm(Ad_avg ~ weight_gr, data=tmp_data)
+
+  tmp_fit_As = lm(As_avg ~ weight_gr, data=tmp_data)
+
+  tmp_row = data.table(sex=tmp_sex,
+                       age=tmp_age,
+                       Ad_model=list(tmp_fit_Ad),
+                       As_model=list(tmp_fit_As),
+                       As_intercept=tmp_fit_As$coefficients[1],
+                       As_slope=tmp_fit_As$coefficients[2],
+                       Ad_intercept=tmp_fit_Ad$coefficients[1],
+                       Ad_slope=tmp_fit_Ad$coefficients[2])
+
+  model_res[[i]] = tmp_row
+
+  # Now, add fitted values for each group. Add directly to `by_id2`.
+
+  by_id2[sex == tmp_sex & age == tmp_age,
+         c("Ad_fit", "As_fit"):=list(predict(tmp_fit_Ad,
+                                             by_id2[sex == tmp_sex & age == tmp_age]),
+                                     predict(tmp_fit_As,
+                                             by_id2[sex == tmp_sex & age == tmp_age]))]
+
+
+}
+
+model_tab = rbindlist(model_res)
+
+
+#========================================
+# Compute Stroke Area Difference and Ejection Fraction Area, Cardiac Output
+
+by_id2[, SA:=Ad_avg - As_avg]
+by_id2[, EFA:=SA / Ad_avg]
+by_id2[, CO:=HR_avg * SA]
+
+
+#========================================
+
+
+######################################################################
+#CHANGES will happen HERE AS I FINISH MORE ULTRASOUND ANALYSIS!!!!!!!!!!!!!!!!!!!!!
+
+
+fwrite(by_id2,
+       file="normalized_ultrasound_values_males_6lines_2024may.txt",
+       sep="\t")
+
+#========================================
+
+by_id2[, genotype:=factor(genotype, levels=c("WT", "HET", "MUT"))]
+
+by_genotype_line = by_id2[, list(mean_Ad_avg=mean(Ad_avg, na.rm=TRUE),
+                                 mean_As_avg=mean(As_avg, na.rm=TRUE),
+                                 mean_Ad_avg=mean(Ad_avg, na.rm=TRUE),
+                                 sd_Ad_avg=sd(Ad_avg, na.rm=TRUE),
+                                 mean_As_avg=mean(As_avg, na.rm=TRUE),
+                                 sd_As_avg=sd(As_avg, na.rm=TRUE),
+                                 mean_SA=mean(SA, na.rm=TRUE),
+                                 mean_EFA=mean(EFA, na.rm=TRUE),
+                                 mean_SA_avg=mean(SA, na.rm=TRUE),
+                                 sd_SA_avg=sd(SA, na.rm=TRUE),
+                                 mean_EFA_avg=mean(EFA, na.rm=TRUE),
+                                 sd_EFA_avg=sd(EFA, na.rm=TRUE),
+                                 mean_weight=mean(weight_gr, na.rm=TRUE),
+                                 sd_weight=sd(weight_gr, na.rm=TRUE),
+                                 mean_HR_avg=mean(HR_avg, na.rm=TRUE),
+                                 sd_HR_avg=sd(HR_avg, na.rm=TRUE),
+                                 mean_inflow_avg=mean(inflow_avg, na.rm=TRUE),
+                                 sd_inflow_avg=sd(inflow_avg, na.rm=TRUE),
+                                 sd_outflow_avg=sd(outflow_avg, na.rm=TRUE),
+                                 mean_outflow_avg=mean(outflow_avg, na.rm=TRUE)),
+                            by=list(sex, age, genotype, line)]
+
+genotype_colors = c(WT="#74add1", HET="#fee090", MUT="#f46d43")
+
+# Loop to create a 6-page set of plots.
+# (1) one page for each line.
+# (2) four panels on each page, M only vs 3month,5month.
+# (3) Ad vs weight + WT regression line + segments for residuals.
+
+
+
+#===============================================================================
+
+#-------------------------------------------------------------------------------
+# One page per line, show Ad, As, SA, EFA, weight, HR, CO.
+# inflow and outflow
+# Allow y-axis scale to vary by line.
+
+
+
+
+
+
+#-----------Compute p-values--------------
+#????????????????????
+# 11 Mar 2022.
+# To get p.adjust values correct, need to do our own t-tests and then
+# re-format into tibble appropriate for stat_pvalue_manual.
+# ** Check line 831.
+
+# 
+# pres_list = list()
+# 
+# for (i in seq_along(var_vec)) {
+#   tmp_var = var_vec[i]
+#   tmp_formula = as.formula(paste(tmp_var, "~ genotype"))
+#   tmp_test <- as_tibble(by_id2) %>%
+#     group_by(line, age, sex) %>%
+#     filter(length(unique(genotype)) >= 2) %>%       #Require at least 2 genotypes.
+#     filter(all(as.vector(table(genotype)) >= 2)) %>% #Require at least 2 measurements per genotype.
+#     tukey_hsd(formula=tmp_formula)
+
+
+
+# ! ALERT !
+# Tukey HSD adjusted p-values have been adjusted for all
+# comparisons within each variable (e.g. all comparisons of Ad),
+# but _not_ adjusted for the 5 different ultrasound variables!
+
+# Ad
+test_tab_Ad <- as_tibble(by_id2) %>%
+  group_by(line, age, sex) %>%
+  filter(length(unique(genotype)) >= 2) %>%       #Require at least 2 genotypes.
+  filter(all(as.vector(table(genotype)) >= 2)) %>% #Require at least 2 measurements per genotype.
+  tukey_hsd(Ad_avg ~ genotype)
+
+
+# As
+test_tab_As <- as_tibble(by_id2) %>%
+  group_by(line, age, sex) %>%
+  filter(length(unique(genotype)) >= 2) %>%       #Require at least 2 genotypes.
+  filter(all(as.vector(table(genotype)) >= 2)) %>% #Require at least 2 measurements per genotype.
+  tukey_hsd(As_avg ~ genotype)
+
+# HR
+test_tab_HR <- as_tibble(by_id2) %>%
+  group_by(line, age, sex) %>%
+  filter(length(unique(genotype)) >= 2) %>%       #Require at least 2 genotypes.
+  filter(all(as.vector(table(genotype)) >= 2)) %>% #Require at least 2 measurements per genotype.
+  tukey_hsd(HR_avg ~ genotype)
+
+# SA
+test_tab_SA <- as_tibble(by_id2) %>%
+  group_by(line, age, sex) %>%
+  filter(length(unique(genotype)) >= 2) %>%       #Require at least 2 genotypes.
+  filter(all(as.vector(table(genotype)) >= 2)) %>% #Require at least 2 measurements per genotype.
+  tukey_hsd(SA ~ genotype)
+
+
+# EFA
+test_tab_EFA <- as_tibble(by_id2) %>%
+  group_by(line, age, sex) %>%
+  filter(length(unique(genotype)) >= 2) %>%       #Require at least 2 genotypes.
+  filter(all(as.vector(table(genotype)) >= 2)) %>% #Require at least 2 measurements per genotype.
+  tukey_hsd(EFA ~ genotype)
+
+
+# weight
+test_tab_weight <- as_tibble(by_id2) %>%
+  group_by(line, age, sex) %>%
+  filter(length(unique(genotype)) >= 2) %>%       #Require at least 2 genotypes.
+  filter(all(as.vector(table(genotype)) >= 2)) %>% #Require at least 2 measurements per genotype.
+  tukey_hsd(weight_gr ~ genotype)
+
+#Inflow
+test_tab_inflow <- as_tibble(by_id2) %>%
+  group_by(line, age, sex) %>%
+  filter(length(unique(genotype)) >= 2) %>%       #Require at least 2 genotypes.
+  filter(all(as.vector(table(genotype)) >= 2)) %>% #Require at least 2 measurements per genotype.
+  tukey_hsd(inflow_avg ~ genotype)
+
+#outflow
+test_tab_outflow <- as_tibble(by_id2) %>%
+  group_by(line, age, sex) %>%
+  filter(length(unique(genotype)) >= 2) %>%       #Require at least 2 genotypes.
+  filter(all(as.vector(table(genotype)) >= 2)) %>% #Require at least 2 measurements per genotype.
+  tukey_hsd(outflow_avg ~ genotype)
+
+#----------------------------------------
+
+
+genotype_colors = c(WT="#74add1", HET="#fee090", MUT="#f46d43")
+
+# If geom_segment(x=as.numeric(genotype) - cross_width,...) is
+# in the first layer, then x is initiated as numeric, not discrete axis!!
+
+# Error: `data` must be uniquely named but has duplicate columns
+
+error_size = 0.8
+cross_size = 1.2
+error_width = 0.4
+cross_width = 0.3 #0.3
+error_color = "grey30"
+bin_denom = 9 #effected by step_increase and y_mult_top, was 14.5
+step_increase = 0.10 #0.05 overlap, 0.20 good
+y_mult_top = 0.055 
+
+colnames(by_id2) <- make.unique(names(by_id2))
+
+pdf("dotplots_6_ultrasound_lines_SIG-VALUES-ON_5_variables_2024.pdf", width=6.5, height=20) #PDF values
+  
+
+
+for (tmp_line in sort(unique(by_id2$line))) {
+
+  tmp_tab = by_id2[line == tmp_line]
+  tmp_by  = by_genotype_line[line == tmp_line]
+  id2 = by_id2[id2 == id2]
+ 
+  tmp_test_Ad = filter(test_tab_Ad, line == tmp_line)
+  tmp_test_Ad = tmp_test_Ad %>% mutate(panel_group=paste(age, sex, sep="_"))
+  tmp_test_Ad <- add_y_position(tmp_test_Ad, step.increase=step_increase, scales = "free") #default is 0.12 step.increase=0.06, scales = "free" 
+
+  tmp_test_As = filter(test_tab_As, line == tmp_line)
+  tmp_test_As = tmp_test_As %>% mutate(panel_group=paste(age, sex, sep="_"))
+  tmp_test_As <- add_y_position(tmp_test_As, step.increase=step_increase, scales = "free")
+
+  tmp_test_SA = filter(test_tab_SA, line == tmp_line)
+  tmp_test_SA = tmp_test_SA %>% mutate(panel_group=paste(age, sex, sep="_"))
+  tmp_test_SA <- add_y_position(tmp_test_SA, step.increase=step_increase, scales = "free")
+
+  tmp_test_EFA = filter(test_tab_EFA, line == tmp_line)
+  tmp_test_EFA = tmp_test_EFA %>% mutate(panel_group=paste(age, sex, sep="_"))
+  tmp_test_EFA <- add_y_position(tmp_test_EFA, step.increase=step_increase, scales = "free")
+  
+  tmp_test_weight = filter(test_tab_weight, line == tmp_line)
+  tmp_test_weight = tmp_test_weight %>% mutate(panel_group=paste(age, sex, sep="_"))
+  tmp_test_weight <- add_y_position(tmp_test_weight, step.increase=step_increase, scales = "free")
+  
+  tmp_test_HR = filter(test_tab_HR, line == tmp_line)
+  tmp_test_HR = tmp_test_HR %>% mutate(panel_group=paste(age, sex, sep="_"))
+  tmp_test_HR <- add_y_position(tmp_test_HR, step.increase=step_increase, scales = "free")
+  
+  tmp_test_inflow = filter(test_tab_inflow, line == tmp_line)
+  tmp_test_inflow = tmp_test_inflow %>% mutate(panel_group=paste(age, sex, sep="_"))
+  tmp_test_inflow <- add_y_position(tmp_test_inflow, step.increase=step_increase, scales = "free")
+  
+  tmp_test_outflow = filter(test_tab_outflow, line == tmp_line)
+  tmp_test_outflow = tmp_test_outflow %>% mutate(panel_group=paste(age, sex, sep="_"))
+  tmp_test_outflow <- add_y_position(tmp_test_outflow, step.increase=step_increase, scales = "free")
+  
+#---Ad panels ----  
+  plt_Ad = ggplot() +
+        theme_bw() +
+        geom_errorbar(data=tmp_by,
+                      aes(ymin=mean_Ad_avg - sd_Ad_avg,
+                          ymax=mean_Ad_avg + sd_Ad_avg,
+                          x=genotype),
+                      color=error_color,
+                      size=error_size,
+                      width=error_width) +
+        geom_segment(data=tmp_by,
+                      aes(y=mean_Ad_avg,
+                          yend=mean_Ad_avg,
+                          x=as.numeric(genotype) - cross_width,
+                          xend=as.numeric(genotype) + cross_width),
+                      color=error_color,
+                      size=cross_size) +
+        geom_dotplot(data=tmp_tab,
+                     aes(y=Ad_avg, x=genotype, fill=genotype),
+                     dotsize=1, binaxis="y", stackdir="center",
+                     binwidth=diff(range(tmp_tab$Ad_avg)) / bin_denom, 
+                     binpositions="bygroup", color="grey30") +
+        scale_fill_manual(values=genotype_colors) +
+        labs(title="Diastolic Area") +
+        facet_grid( ~ age) + # (sex ~ age)
+        stat_pvalue_manual(data=tmp_test_Ad, 
+                           label.size=3.0, tip.length = 0.01,
+                           label="p.adj", hide.ns=FALSE,step.increase = step_increase)  +
+  scale_y_continuous(expand = expansion(mult = c(0.15, y_mult_top)))+ #changed from 0.05 
+  geom_label_repel(aes(y=Ad_avg, label=rownames(id2)), hjust=0,
+                   size=3, segment.size=0.25, nudge_y = 0.5, direction="y", na.rm = TRUE) 
+
+
+
+#---As panels ----
+  plt_As = ggplot() +
+        theme_bw() +
+        geom_errorbar(data=tmp_by,
+                      aes(ymin=mean_As_avg - sd_As_avg,
+                          ymax=mean_As_avg + sd_As_avg,
+                          x=genotype),
+                      color=error_color,
+                      size=error_size,
+                      width=error_width) +
+        geom_segment(data=tmp_by,
+                      aes(y=mean_As_avg,
+                          yend=mean_As_avg,
+                          x=as.numeric(genotype) - cross_width,
+                          xend=as.numeric(genotype) + cross_width),
+                      color=error_color,
+                      size=cross_size) +
+        # geom_point(data=tmp_tab,
+        #            aes(y=As_avg, x=genotype, fill=genotype),
+        #            size=3, color="grey30", shape=21) +
+        geom_dotplot(data=tmp_tab,
+                     aes(y=As_avg, x=genotype, fill=genotype),
+                     dotsize=1, binaxis="y", stackdir="center",
+                     binwidth=diff(range(tmp_tab$As_avg)) / bin_denom,
+                     binpositions="bygroup", color="grey30") +
+        scale_fill_manual(values=genotype_colors) +
+        labs(title="Systolic Area") +
+        facet_grid(sex ~ age) +
+        stat_pvalue_manual(data=tmp_test_As,
+                     label="p.adj", hide.ns=FALSE,
+                     label.size=3, tip.length = 0.01,step.increase = step_increase) +
+    scale_y_continuous(expand = expansion(mult = c(0.15, y_mult_top)))
+
+#---SA panels ----
+  plt_SA = ggplot() +
+        theme_bw() +
+        geom_errorbar(data=tmp_by,
+                      aes(ymin=mean_SA_avg - sd_SA_avg,
+                          ymax=mean_SA_avg + sd_SA_avg,
+                          x=genotype),
+                      color=error_color,
+                      size=error_size,
+                      width=error_width) +
+        geom_segment(data=tmp_by,
+                      aes(y=mean_SA_avg,
+                          yend=mean_SA_avg,
+                          x=as.numeric(genotype) - cross_width,
+                          xend=as.numeric(genotype) + cross_width),
+                      color=error_color,
+                      size=cross_size) +
+        geom_point(data=tmp_tab,
+                   aes(y=SA, x=genotype, fill=genotype),
+                   size=3, color="grey30", shape=21) +
+
+        geom_dotplot(data=tmp_tab,
+                     aes(y=SA, x=genotype, fill=genotype),
+                     dotsize=1, binaxis="y", stackdir="center",
+                     binwidth=diff(range(tmp_tab$SA)) / bin_denom,
+                     binpositions="bygroup", color="grey30") +
+
+        scale_fill_manual(values=genotype_colors) +
+        labs(title="Stroke Area Difference") +
+        facet_grid(sex ~ age) +
+        stat_pvalue_manual(data=tmp_test_SA,
+                     label="p.adj", hide.ns=FALSE,
+                     label.size=3, tip.length = 0.01,step.increase = step_increase) +
+    scale_y_continuous(expand = expansion(mult = c(0.15, y_mult_top)))
+
+
+#---EFA panels ----
+  plt_EFA = ggplot() +
+        theme_bw() +
+        geom_errorbar(data=tmp_by,
+                      aes(ymin=mean_EFA - sd_EFA,
+                          ymax=mean_EFA + sd_EFA,
+                          x=genotype),
+                      color=error_color,
+                      size=error_size,
+                      width=error_width) +
+        geom_segment(data=tmp_by,
+                      aes(y=mean_EFA,
+                          yend=mean_EFA,
+                          x=as.numeric(genotype) - cross_width,
+                          xend=as.numeric(genotype) + cross_width),
+                      color=error_color,
+                      size=cross_size) +
+        geom_point(data=tmp_tab,
+                   aes(y=EFA, x=genotype, fill=genotype),
+                   size=3, color="grey30", shape=21) +
+
+        geom_dotplot(data=tmp_tab,
+                     aes(y=EFA, x=genotype, fill=genotype),
+                     dotsize=1, binaxis="y", stackdir="center",
+                     binwidth=diff(range(tmp_tab$EFA)) / bin_denom,
+                     binpositions="bygroup", color="grey30") +
+
+        scale_fill_manual(values=genotype_colors) +
+        labs(title="Ejection Fraction (Area)") +
+        facet_grid(sex ~ age) +
+        stat_pvalue_manual(data=tmp_test_EFA,
+                     label="p.adj", hide.ns=FALSE,
+                     label.size=3, tip.length = 0.01,step.increase = step_increase)# +
+    #scale_y_continuous(expand = expansion(mult = c(0.15, y_mult_top)))
+
+#---Weight panels ----
+  plt_weight = ggplot() +
+        theme_bw() +
+        geom_errorbar(data=tmp_by,
+                      aes(ymin=mean_weight - sd_weight,
+                          ymax=mean_weight + sd_weight,
+                          x=genotype),
+                      color=error_color,
+                      size=error_size,
+                      width=error_width) +
+        geom_segment(data=tmp_by,
+                      aes(y=mean_weight,
+                          yend=mean_weight,
+                          x=as.numeric(genotype) - cross_width,
+                          xend=as.numeric(genotype) + cross_width),
+                      color=error_color,
+                      size=cross_size) +
+        # geom_point(data=tmp_tab,
+        #            aes(y=EFA, x=genotype, fill=genotype),
+        #            size=3, color="grey30", shape=21) +
+
+        geom_dotplot(data=tmp_tab,
+                     aes(y=weight_gr, x=genotype, fill=genotype),
+                     dotsize=1, binaxis="y", stackdir="center",
+                     binwidth=diff(range(tmp_tab$weight_gr)) / bin_denom,
+                     binpositions="bygroup", color="grey30") +
+
+        scale_fill_manual(values=genotype_colors) +
+        labs(title="Weight (grams)") +
+        facet_grid(sex ~ age) +
+        stat_pvalue_manual(data=tmp_test_weight,
+                     label="p.adj", hide.ns=FALSE,
+                     label.size=3, tip.length = 0.01,step.increase = step_increase) +
+    scale_y_continuous(expand = expansion(mult = c(0.15, y_mult_top)))
+
+#---HR panels ----  
+ # plt_HR = ggplot() +
+    
+
+#---inflow panels ----  
+  #plt_inflow = ggplot() +
+    
+#---outflow panels ----  
+  #plt_outflow = ggplot() +
+    
+    
+  
+# #------ Print figure as page in pdf file -----
+#   # pdf("test.pdf", width=6.5, height=24)
+
+  print(plt_Ad + #plt_EFA + plt_weight +
+          plot_layout(guides="collect", nrow=6, ncol=1) +
+          plot_annotation(title=tmp_line))
+  
+  # Put all plots into one pdf.
+  #pdf("ultrasound_plots_2024.pdf", width=6.5, height=8)
+  #print(plt_Ad)
+  # print(p12)
+  # print(p13)
+  # print(p2)
+  # print(p22)
+  # print(p23)
+  # print(p24)
+  #dev.off()
+
+  # pdf(file = "Ultrasound_Normalization/dotplots_6_ultrasound_lines_SIG-VALUES-ON_5_variables_2024.pdf", title="Ultrasound 5 variables")
+  # plot(plt_Ad) # Or other graphics you want to have printed in your pdf
+  # dev.off()
+    
+}
+
+dev.off()
+
+
+
+
+# stat_pvalue_manual function is causing distortions of y-axis and dot size.
+# Possible alternative: 
+# https://cran.r-project.org/web/packages/ggprism/vignettes/pvalues.html
+# ggprism includes the add_pvalue() function to add p-values with or without brackets to ggplots
+
+
+#===============================================================================
+# Perform all desired pair-wise t-tests. Collect p-values, effect sizes and
+# confidence intervals.
+
+tres = t.test(by_id2[sex == "M" & age == "5month" & line == "SET-6del" & genotype == "MUT", Ad_avg], 
+              by_id2[sex == "M" & age == "5month" & line == "SET-6del" & genotype == "WT", Ad_avg])
+
+
+
+
+comp_tab = by_id2[, list(comparison=rep(c("HET", "MUT"), times=4), 
+                           variable=rep(c("Ad_norm", "As_norm", "SA_norm", "EFA_norm"), each=2)
+                         ), 
+                  by=list(sex, age, line)]
+
+
+# Put this into a table-based output file. (HTML? Word table? tab-delimited txt?)
+
+by_id2[, .N, list(sex, age, line)]
+#       sex    age         line  N
+# 1:   M 3month    ATR1-3del 17
+# 2:   M 3month     SET-6del 14
+# 3:   M 3month    SET-13del 17
+# 4:   M 5month     HMG-9del 14
+# 5:   M 5month HMG-4del2ins 14
+# 6:   M 5month   ATR1-16del 12
+# 7:   M 5month     SET-6del 16
+# 8:   M 5month    SET-13del 11
+# 9:   M 3month HMG-4del2ins 15
+# 10:   M 3month     HMG-9del 13
+# 11:   M 5month    ATR1-3del 11
+# 12:   M 3month   ATR1-16del 14  
+
+
+
+tres_list = list()
+
+for (i in seq(nrow(comp_tab))) {
+  tmp_sex = comp_tab[i, sex]
+  tmp_age = comp_tab[i, age]
+  tmp_line = comp_tab[i, line]
+  tmp_comp = comp_tab[i, comparison]
+  tmp_var = comp_tab[i, variable]
+  
+  wt_data = by_id2[genotype == "WT" & 
+                   sex == tmp_sex & 
+                   age == tmp_age & 
+                   line == tmp_line, 
+                   ..tmp_var]
+  
+  other_data = by_id2[genotype == tmp_comp & 
+                   sex == tmp_sex & 
+                   age == tmp_age & 
+                   line == tmp_line, 
+                   ..tmp_var]
+  
+  # Check that both group have n >= 2.
+  if (sum(!is.na(wt_data)) > 1 & sum(!is.na(other_data)) > 1) {
+    tmp_res = t.test(x=other_data,
+                     y=wt_data,
+                     alternative = "two.sided",
+                     conf.level=0.95)
+  
+    new_row = data.table(sex=tmp_sex,
+                         age=tmp_age,
+                         line=tmp_line,
+                         comparison_vs_wt=tmp_comp,
+                         comparison_variable=tmp_var,
+                         effect_size=tmp_res$estimate[1] - tmp_res$estimate[2], # (mutant or het mean) - wt mean
+                         pvalue=tmp_res$p.value,
+                         conf_lower=tmp_res$conf.int[1],
+                         conf_upper=tmp_res$conf.int[2],
+                         sample_size_wt=nrow(wt_data),
+                         sample_size_other=nrow(other_data),
+                         t_statistic=tmp_res$statistic,
+                         df=tmp_res$parameter)
+  } else {
+    new_row = data.table(sex=tmp_sex,
+                         age=tmp_age,
+                         line=tmp_line,
+                         comparison_vs_wt=tmp_comp,
+                         comparison_variable=tmp_var,
+                         effect_size=NA_real_,
+                         pvalue=NA_real_,
+                         conf_lower=NA_real_,
+                         conf_upper=NA_real_,
+                         sample_size_wt=sum(!is.na(wt_data)),
+                         sample_size_other=sum(!is.na(other_data)),
+                         t_statistic=NA_real_,
+                         df=NA_real_)
+  }
+  
+  tres_list[[i]] = new_row
+                       
+}
+
+# Summary table of all pair-wise t.test results and related values.
+stats_tab = rbindlist(tres_list)
+
+n_comparisons = sum(!is.na(stats_tab$pvalue))
+
+stats_tab[, padj:=p.adjust(pvalue, method="fdr", n=n_comparisons)]
+
+# Set measurment variable order.
+
+stats_tab[, comparison_variable:=factor(comparison_variable,
+                                        levels=c("As_norm", "Ad_norm",
+                                                 "SA_norm", "EFA_norm"))]
+
+# Create new factor columns for comparison labels? "WT vs. MUT"
+
+label_tr_vec = c(HET="WT vs. HET", MUT="WT vs. MUT")
+stats_tab[, comp_labels:=factor(label_tr_vec[comparison_vs_wt])]
+
+#===============================================================================
+# Save stats table as tab-delimited text file.
+
+fwrite(stats_tab, 
+       file="ultrasound_ttest_results_table_n_fish_6lines_2023may16.txt", 
+       sep="\t")
+
+
+#===============================================================================
+# Plots of effect sizes and 95% confidence intervals.
+
+subtab = stats_tab[line == "SET-6del"]
+
+
+
+
+f01 = ggplot(subtab, aes(x=effect_size, y=comparison_vs_wt,
+                         xmin=conf_lower, xmax=conf_upper, color=sex, fill=sex)) +
+      theme_bw() +
+      geom_vline(xintercept=0.0, size=0.8, color="grey30", linetype="11") +
+      geom_errorbarh(position = position_dodge(width = 0.5), height=0.3) +
+      geom_point(size=2, shape=21, color="grey30",
+                 position = position_dodge(width = 0.5)) +
+      facet_grid(age ~ comparison_variable, scales="free_x")
+
+#8c510a
+#d8b365
+#f6e8c3
+#c7eae5
+#5ab4ac
+#01665e
+
+
+# Change comparison labels
+
+age_colors = c("3month"="#d8b365", "5month"="#5ab4ac")
+
+subtab2 = stats_tab[sex == "M"]
+
+f02 = ggplot(subtab2, aes(x=effect_size, y=comp_labels,
+                         xmin=conf_lower, xmax=conf_upper, color=age, fill=age)) +
+      theme_bw() +
+      geom_vline(xintercept=0.0, size=0.8, color="grey30", linetype="11") +
+      geom_errorbarh(position = position_dodge(width = 0.5), height=0.3) +
+      geom_point(size=2, shape=21, color="grey30",
+                 position = position_dodge(width = 0.5)) +
+      scale_color_manual(values=age_colors) +
+      scale_fill_manual(values=age_colors) +
+      facet_grid(line ~ comparison_variable, scales="free_x") +
+      theme(axis.title.y=element_blank()) +
+      labs(title="Normalized ultrasound measurments. n = 96 males, 6 lines, 2 time points.") +
+      labs(x="Group differences for WT vs. HET and WT vs. MUT comparisons +/- 95% confidence intervals.")
+
+ggsave("forest_plot_males_all_lines_all_ages_20220118.pdf", 
+       plot=f02, width=9, height=7)
+
+
+
+
