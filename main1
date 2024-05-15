@@ -1,4 +1,5 @@
-#From normalized data R, but not normalizing any data
+#From code with Brad Demarest
+#Ultrasound of kmt2d mutants 3 and 5 month males
 
 
 library(data.table)
